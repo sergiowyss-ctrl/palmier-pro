@@ -1,0 +1,9 @@
+{
+  "name": "palmier-editing",
+  "version": "0.1.0",
+  "description": "Personal Palmier Pro video-editing playbook. Drives the Palmier Pro MCP to assemble and edit a timeline — cuts, captions, generated shots, exports — with YouTube/shorts defaults and a Seedance-to-timeline pipeline. Pairs with the installed palmier-pro MCP extension.",
+  "author": {
+    "name": "Sergio Wyss"
+  },
+  "keywords": ["video", "editing", "palmier", "youtube", "shorts", "seedance"]
+}

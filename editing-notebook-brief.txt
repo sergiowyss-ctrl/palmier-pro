@@ -1,0 +1,170 @@
+PALMIER PRO — AI VIDEO EDITING SETUP & PLAYBOOK
+(Session brief, captured 2026-06-20. Source of truth for the "editing" NotebookLM.)
+
+==================================================
+0. ONE-LINE SUMMARY
+==================================================
+Palmier Pro is an open-source, AI-native macOS video editor that exposes a local MCP server, so an AI agent (Claude) can read and edit the timeline directly — cut clips, add captions, keyframe motion, pull shots from the web, and assemble AI-generated footage. We audited it, installed it, wired it into Claude Code + Cowork/chat, built a reusable skill, and ran a real edit end to end.
+
+
+==================================================
+1. WHAT PALMIER PRO IS
+==================================================
+- Open-source (GPLv3) macOS video editor, Y Combinator S24. ~262 Swift files, SwiftUI + AppKit + AVFoundation. Requires macOS 26 (Tahoe) on Apple Silicon.
+- "Premiere Pro, but built for AI." You and an agent edit the same timeline together.
+- The editor + the MCP server + the agent chat are all open source. Only the GENERATIVE AI processing (Seedance, Kling, Nano Banana Pro) is closed and needs login + subscription.
+- Plain editing is free, no login required.
+- Installed version this session: v0.3.4, at /Applications/PalmierPro.app.
+
+
+==================================================
+2. SECURITY AUDIT (verdict: clean, would run it)
+==================================================
+Good:
+- Secrets in macOS Keychain (not UserDefaults). Anthropic key via Keychain or ANTHROPIC_API_KEY env.
+- Auto-update via Sparkle with EdDSA signature verification + HTTPS feed + notarized DMGs. A compromised download host alone cannot push malware without the private signing key.
+- The installed DMG was verified: signed "Developer ID Application: Palmier, Inc. (MMFLRC7562)", hardened runtime, Gatekeeper "Notarized Developer ID".
+- No shell-out anywhere in the app code (no Process/NSTask/system()).
+- MCP server binds to 127.0.0.1 (IPv4 loopback) only — not reachable from the LAN. Uses the official MCP SDK origin-validation pipeline (defense against browser DNS-rebinding).
+
+Residual risks (low, worth knowing):
+- The local MCP server (port 19789) is UNAUTHENTICATED. Any local process running as you can call the editor tools; browser protection rests on the SDK's Origin check. On a non-sandboxed user app this is not a real privilege escalation, but be mindful when an agent acts on untrusted video/caption content (prompt-injection could nudge a file-import action).
+- import_media accepts an arbitrary local path (media extensions only) and an arbitrary https URL (blind SSRF — https-only, no internal-IP allowlist, response only saved as media). Constrained but noted.
+
+Forks: GitHub reports ~183 forks but they are almost all dormant mirrors with no stars and no meaningful divergence. No community fork worth adopting.
+
+
+==================================================
+3. HOW IT'S WIRED INTO CLAUDE (the setup we built)
+==================================================
+There are TWO independent plumbing systems:
+
+A) Claude Code (CLI, incl. Code mode in the Mac app) — reads MCP from ~/.claude.json and skills from ~/.claude/skills/.
+   - MCP scoped to video folders ONLY (not global), to avoid loading 29 tools in unrelated projects:
+       .mcp.json in ~/Documents/Palmier Pro/  and  ~/Documents/Youtube Videos/
+   - Removed the user-scope registration so other coding projects stay clean.
+
+B) Claude Desktop chat + Cowork — separate "Extensions/Connectors" system.
+   - Installed the bundled MCP extension (local.mcpb.palmier.palmier-pro) -> chat/Cowork get the 29 tools after enabling + restart.
+
+KEY LESSON: a global ~/.claude/CLAUDE.md loads in EVERY session (token cost + noise in unrelated projects). The bigger always-on cost is actually the MCP tools themselves at user scope. So: scope the MCP to video folders, and put conventions in a SKILL (on-demand, ~0 idle cost), not a global CLAUDE.md.
+
+
+==================================================
+4. THE palmier-editing SKILL + PLUGIN
+==================================================
+- Skill: ~/.claude/skills/palmier-editing/SKILL.md  (Claude Code).
+- Same skill packaged as a plugin for Cowork/chat: ~/Documents/Palmier Pro/palmier-editing.plugin (skill-only, reuses the installed MCP extension — no duplicate server).
+- It is the PERSONAL layer on top of Palmier's own injected server instructions (which already cover frame math, get_timeline-first, the cost-gate, model picks). It adds:
+   - Defaults: YouTube 16:9 1080p/30; Shorts/Reels/TikTok 9:16 1080x1920.
+   - The generative pipeline bridge to the user's own skills (character-reference-sheet -> seedance-prompt-builder -> storyboard-video-maker -> watch).
+   - Reusable recipes: short-from-master, caption pass, B-roll layering, beat-synced cuts.
+   - Cost discipline: confirm prompt+model+duration+cost before any paid generate_*/upscale.
+   - Reminder: there is NO MCP export tool — export is manual in-app.
+- Triggers on: "edit my video", "make a short", "caption pass", "assemble the timeline", "build the YouTube video", "put these clips together".
+
+
+==================================================
+5. CAPABILITIES — THE 29 MCP TOOLS, BY JOB
+==================================================
+- Read/inspect: get_timeline, get_media, inspect_media, inspect_timeline, get_transcript, search_media, list_models, list_folders.
+- Cut & arrange: add_clips, remove_clips, move_clips, split_clip, ripple_delete_ranges, remove_tracks.
+- Properties & motion: set_clip_properties (duration, trim, speed, volume, opacity, transform/text style), set_keyframes (position/scale/opacity/rotation/volume).
+- Text & captions: add_texts, add_captions.
+- Import: import_media (path / https url / base64 bytes).
+- Organize: create_folder, move_to_folder, rename_media, rename_folder, delete_media, delete_folder.
+- Generative (needs subscription; canGenerate flag): generate_video, generate_image, generate_audio, upscale_media.
+
+
+==================================================
+6. CREATIVE THINGS YOU CAN DO (free unless marked $=subscription)
+==================================================
+SOURCE & ASSEMBLE:
+- Clip-mine ANY video (YouTube/TikTok/Vimeo/Instagram/X/local) -> trim to exact moments -> place.
+- Supercuts / multi-source compilations.
+- Find moments by MEANING (search_media) or by WORDS (get_transcript). No scrubbing.
+- Tighten: ripple-delete dead air, cut filler words via word-level timing.
+
+MOTION & ENERGY (free): keyframed zoom/punch-ins, pans, Ken Burns on stills, speed ramps, slow-mo/time-lapse, PIP/overlays, fades, rotation.
+
+TEXT & CAPTIONS (free): auto-captions with styling, keyword pop-color, titles/lower-thirds, kinetic text, other-language captions.
+
+AUDIO: free volume ducking/mute/fade/import-your-own-music; $ generate voiceover (TTS), music (Lyria), SFX.
+
+GENERATE NET-NEW ($): B-roll on demand, stills->video with character consistency, storyboard->multi-shot->stitch, upscaling.
+
+REFORMAT/REPURPOSE (free): one 16:9 master -> 9:16 Short / 1:1 square, auto center-crop. Make once, ship many platform cuts.
+
+PROJECT IDEAS tuned to a YouTube channel:
+1. Shorts factory — feed a long video, mine the 3 best 30-60s moments, reframe 9:16, caption + punch-in each.
+2. Faceless compilation channel — clip-mine a niche, stitch, caption, music bed.
+3. UGC / ad factory ($) — generate a character, script the hook, generate shots, assemble + caption.
+
+
+==================================================
+7. CLIP-MINING FROM THE WEB (the yt-dlp bridge)
+==================================================
+- Tooling: yt-dlp + ffmpeg (already installed). Download only the needed section with: yt-dlp --download-sections "*MM:SS-MM:SS" --force-keyframes-at-cuts ... -> a small exact clip -> import_media by path.
+- YouTube: works. Instagram Reels/posts + X/Twitter videos: also work via yt-dlp (public).
+- Login-gated/private/Stories: need your browser cookies (yt-dlp --cookies-from-browser). IG throttles hard.
+- A separate social-data MCP (TikTok/IG/X/Reddit) is connected for RESEARCH (trending posts, comments) — distinct from downloading the file.
+- Rights note: reusing other creators' clips can trigger YouTube Content-ID/copyright claims on your upload. Fine for personal/fair-use/CC/stock.
+
+
+==================================================
+8. THE EDIT WE ACTUALLY RAN (worked example + the nuggets)
+==================================================
+Task: take a YouTube shot (6:00-6:30) into project "test 1", then add captions, zoom, and speed.
+Pipeline that ran:
+1. yt-dlp downloaded the 30s section (1080p, with audio) -> ~/Documents/Youtube Videos/sources/.
+2. import_media by path into the project.
+3. inspect_media to CONFIRM the content (a creator demoing a webcam fruit-slicing game) — never trust the filename.
+4. add_clips placed the 30s (900 frames @ 30fps); auto-created V1 video + A1 linked audio.
+5. split_clip near the end -> slow-mo the tail (set_clip_properties speed 0.6; linked audio retimed; tail volume to 0.5).
+6. Zoom punch-ins on the main clip via set_keyframes on BOTH scale and position (centered).
+7. add_captions LAST (uppercase, bold) so they lock to final timing -> 15 captions.
+8. inspect_timeline rendered composited frames to visually verify.
+
+TECHNICAL NUGGETS (reusable rules):
+- Timing is in FRAMES: frame = seconds x fps. (Project was 30fps, so source-second x 30 = frame.)
+- Centered zoom needs scale AND position keyframes in lockstep: for scale S, top-left position = (0.5 - S/2, 0.5 - S/2). Scale alone anchors to top-left and drifts off-center.
+- Do CAPTIONS LAST, after any speed/retime edits, so they align to the final audio.
+- Keep speed changes OFF the dialogue (except a tail flourish) to avoid chipmunk audio and caption desync.
+- split_clip on a linked A/V clip splits BOTH the video and its linked audio.
+- Restraint reads as intentional: 2 punch-ins, not 10.
+- Verify with get_timeline / inspect_timeline rather than assuming.
+- Clip edits are free + undoable (just do them); generation costs real money + is not undoable (always confirm first).
+
+
+==================================================
+9. THE FULL CONTENT-ENGINE CHAIN (the endgame)
+==================================================
+Five stages, mostly already connected on this machine:
+1. RESEARCH  -> deep-research skill, WebSearch, social-data MCP, notebooklm.            [ready]
+2. SCRIPT    -> Claude writes in your brand voice / templates.                          [ready]
+3. GENERATE  -> Higgsfield MCP + your Seedance/storyboard skills (refs, shots, stitch). [ready]
+4. ASSEMBLE  -> Palmier: import, cut, caption, motion, reframe.                          [ready]
+5. PUBLISH   -> export (manual render); posting could be added later.                    [manual]
+
+THE GLUE (stage 3 -> 4): the agent downloads Higgsfield's output and import_media's it into Palmier. There is no literal app-to-app auto-push — the AGENT is the conveyor belt. Fully scriptable.
+
+MONEY INSIGHT: generate in Higgsfield (where the subscription already lives) and let Palmier only ASSEMBLE (free) — this sidesteps Palmier's paid generation gate entirely.
+
+"HERMES ENGINE AGENT": the research/script brain at stages 1-2. Claude can play that role today (deep-research/notebooklm/social MCP/brand templates), or a specific "Hermes" tool can be bolted in as the research module if it exposes an API/MCP.
+
+THREE AUTOMATION LEVELS, same pipeline:
+1. On command (today): "make a 60s short about X" -> agent runs all 5 stages in one session with approval checkpoints.
+2. Unattended: wrap in a cron (schedule skill) -> wakes up to a draft timeline to review.
+3. Packaged: encode as a content-engine skill/workflow (the user's "Content Engine Architecture" + Seedance ad-factory idea, made repeatable).
+
+REALISTIC GUARDRAIL: keep human approval checkpoints at SCRIPT and SHOT-SELECTION. Fully unattended end-to-end video still drifts on quality; "agent drafts, you greenlight" is the sweet spot for now.
+
+
+==================================================
+10. QUICK REFERENCE
+==================================================
+- MCP server: http://127.0.0.1:19789/mcp (app must be running with a PROJECT OPEN, or tools return "Editor not available").
+- Connect Claude Code: claude mcp add --transport http palmier-pro http://127.0.0.1:19789/mcp
+- Source clips workspace: ~/Documents/Youtube Videos/sources/
+- Skill: ~/.claude/skills/palmier-editing/ ; Plugin: ~/Documents/Palmier Pro/palmier-editing.plugin
+- Defaults: YouTube 16:9 1080p/30 ; Shorts 9:16 1080x1920.

@@ -1,0 +1,21 @@
+{
+  "id" : "5076D884-FDB1-488B-B564-FEAE5B848410",
+  "isOpen" : false,
+  "messages" : [
+    {
+      "blocks" : [
+        {
+          "kind" : "text",
+          "text" : "Now editing: serjoy-slice-01"
+        }
+      ],
+      "id" : "C3753090-1E89-4DB8-ACBF-42933E40CC54",
+      "mentions" : [
+
+      ],
+      "role" : "system"
+    }
+  ],
+  "title" : "New chat",
+  "updatedAt" : "2026-07-17T20:08:37Z"
+}
